@@ -7,7 +7,9 @@ import Control.Monad.IO.Class
 import Control.Monad.Reader
 
 import Data.Pool
-import Data.Text.Lazy (Text)
+import Data.Text.Lazy (pack)
+
+import Network.HTTP.Types.Status
 
 import Prelude.Unicode
 
@@ -17,8 +19,13 @@ newtype App conn m a = App {unApp ∷ ReaderT (Pool conn) m a}
                      deriving (Functor, Monad, Applicative, MonadIO,
                                MonadReader (Pool conn))
 
-type AppM       conn m = ScottyT Text (App conn m)
-type AppActionM conn m = ActionT Text (App conn m)
+instance ScottyError Status where
+  stringError = toEnum ∘ read
+  showError   = pack ∘ show
+
+type AppM       conn m = ScottyT Status (App conn m)
+type AppActionM conn m = ActionT Status (App conn m)
 
 runApp ∷ Monad m ⇒ Pool conn → App conn m a → m a
 runApp pool = flip runReaderT pool ∘ unApp
+

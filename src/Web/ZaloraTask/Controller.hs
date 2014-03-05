@@ -10,6 +10,8 @@ import Data.Text.Lazy (Text, append, fromStrict, unpack)
 
 import Database.Persist.Sql hiding (get)
 
+import Network.HTTP.Types.Status
+
 import Prelude.Unicode
 
 import Web.PathPieces
@@ -23,7 +25,11 @@ data Shoe = Shoe {description ∷ Text, color ∷ Text, size ∷ Text, photo ∷
 $(deriveFromJSON defaultOptions ''Shoe)
 
 actions ∷ AppM Connection IO ()
-actions = makeShoes >> showShoes >> listShoes
+actions = do
+  handleAppError
+  post "/shoes"     makeShoes
+  get  "/shoes/:id" showShoes
+  get  "/shoes"     listShoes
 
 prepare ∷ Shoe → IO M.Shoe
 prepare shoe = do
@@ -31,16 +37,19 @@ prepare shoe = do
   let p = "/path/to/photo"
   return $ M.Shoe (description shoe) (color shoe) (read ∘ unpack $ size shoe) p
 
-makeShoes ∷ AppM Connection IO ()
-makeShoes = post "/shoes" $ do
+makeShoes ∷ AppActionM Connection IO ()
+makeShoes = do
   pool ← lift ask
-  shoe ← jsonData
+  shoe ← jsonData `rescue` \_ → raise badRequest400
   shoe' ← liftIO $ prepare shoe
   shoeId ← liftIO $ unKey <$> (flip runSqlPersistMPool pool $ insert shoe')
   redirect $ "/shoes/" `append` (fromStrict $ toPathPiece shoeId)
 
-showShoes ∷ AppM Connection IO ()
-showShoes = get "/shoes/:id" $ return ()
+showShoes ∷ AppActionM Connection IO ()
+showShoes = return ()
 
-listShoes ∷ AppM Connection IO ()
-listShoes = get "/shoes" $ return ()
+listShoes ∷ AppActionM Connection IO ()
+listShoes = return ()
+
+handleAppError ∷ Monad m ⇒ AppM conn m ()
+handleAppError = defaultHandler $ \e → status e

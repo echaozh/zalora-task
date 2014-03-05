@@ -26,9 +26,9 @@ spec = do
   describe "makeShoes" $ before makePool $ do
     context "When provided with invalid input" $ do
       it "reports 400" $ \pool → do
-        let req = SRequest (setPath defaultRequest{requestMethod="POST"}
-                            "/shoes") ""
+        let req = SRequest defaultRequest{requestMethod="POST"} ""
+            app = handleAppError >> post "/" makeShoes
         statusCode ∘ simpleStatus
-          <$> (scottyAppT (runApp pool) (runApp pool) makeShoes
+          <$> (scottyAppT (runApp pool) (runApp pool) app
                >>= runSession (srequest req))
           `shouldReturn` 400
