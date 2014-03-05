@@ -19,9 +19,9 @@ import Web.ZaloraTask.Controller
 import Web.ZaloraTask.Model
 import Web.ZaloraTask.Types
 
-makePool ∷ IO ConnectionPool
-makePool = createSqlitePool ":memory:" 1
-           -- createPostgresqlPool "dbname=auction_dev" 1
+withPool ∷ (ConnectionPool → IO ()) -> IO ()
+withPool = withSqlitePool ":memory:" 1
+           -- withPostgresqlPool "dbname=auction_dev" 1
 
 makeTable ∷ ConnectionPool → IO ()
 makeTable = runSqlPersistMPool $ runMigration migrate
@@ -30,7 +30,7 @@ spec ∷ Spec
 spec = makeShoesSpec >> showShoesSpec >> listShoesSpec
 
 makeShoesSpec ∷ Spec
-makeShoesSpec = describe "makeShoes" $ before makePool $ do
+makeShoesSpec = describe "makeShoes" $ around withPool $ do
   let app p     = scottyAppT (runApp p) (runApp p)
                   $ handleAppError >> post "/" makeShoes
       run p req = runSession (srequest req) =<< (app p)
