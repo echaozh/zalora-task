@@ -2,11 +2,10 @@
 
 module Web.ZaloraTask.Controller where
 
-import Control.Applicative
+import Control.Exception
 import Control.Monad.Reader
 
 import Data.Aeson.TH
-import Data.Maybe
 import Data.Text.Lazy (Text, append, fromStrict, unpack)
 
 import Database.Persist.Sql hiding (get)
@@ -27,7 +26,7 @@ $(deriveFromJSON defaultOptions ''Shoe)
 
 actions ∷ AppM Connection IO ()
 actions = do
---  handleAppError
+  handleAppError
   post "/shoes"     makeShoes
   get  "/shoes/:id" showShoes
   get  "/shoes"     listShoes
@@ -41,11 +40,12 @@ prepare shoe = do
 makeShoes ∷ AppActionM Connection IO ()
 makeShoes = do
   pool ← lift ask
-  shoe ← (Just <$> jsonData) `rescue` \_ → status badRequest400 >> return Nothing
-  when (shoe ≢ Nothing) $ do
-    shoe' ← liftIO $ prepare $ fromJust shoe
-    shoeId ← liftIO $ unKey <$> (flip runSqlPersistMPool pool $ insert shoe')
-    redirect $ "/shoes/" `append` (fromStrict $ toPathPiece shoeId)
+  shoe ← jsonData `rescue` \_ → raise badRequest400
+  path ← liftIO $ handle (\e → return (e∷IOException) >> return Nothing) $ do
+    shoe' ← prepare shoe
+    shoeId ← flip runSqlPersistMPool pool $ insert shoe'
+    return $ Just $ "/shoes/" `append` (fromStrict $ toPathPiece $ unKey shoeId)
+  maybe (raise internalServerError500) redirect path
 
 showShoes ∷ AppActionM Connection IO ()
 showShoes = return ()
@@ -53,5 +53,5 @@ showShoes = return ()
 listShoes ∷ AppActionM Connection IO ()
 listShoes = return ()
 
--- handleAppError ∷ Monad m ⇒ AppM conn m ()
--- handleAppError = defaultHandler $ \e → status e
+handleAppError ∷ Monad m ⇒ AppM conn m ()
+handleAppError = defaultHandler $ \e → status e

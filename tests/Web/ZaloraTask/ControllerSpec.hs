@@ -5,6 +5,7 @@ import Control.Applicative
 import Data.ByteString.Lazy.Char8 (pack)
 
 import Database.Persist.Sqlite hiding (migrate)
+-- import Database.Persist.Postgresql hiding (migrate)
 
 import Network.HTTP.Types.Status
 import Network.Wai
@@ -20,6 +21,7 @@ import Web.ZaloraTask.Types
 
 makePool ∷ IO ConnectionPool
 makePool = createSqlitePool ":memory:" 1
+           -- createPostgresqlPool "dbname=auction_dev" 1
 
 makeTable ∷ ConnectionPool → IO ()
 makeTable = runSqlPersistMPool $ runMigration migrate
@@ -29,21 +31,26 @@ spec = makeShoesSpec >> showShoesSpec >> listShoesSpec
 
 makeShoesSpec ∷ Spec
 makeShoesSpec = describe "makeShoes" $ before makePool $ do
-  let app p     = scottyAppT (runApp p) (runApp p) $ post "/" makeShoes
+  let app p     = scottyAppT (runApp p) (runApp p)
+                  $ handleAppError >> post "/" makeShoes
       run p req = runSession (srequest req) =<< (app p)
+      goodReq   = SRequest defaultRequest{requestMethod="POST"}
+                  $ pack ("{\"description\":\"just shoes\",\"color\":\"red\","
+                          ++ "\"size\":\"35\",\"photo\":\"MTIzNAo=\"}")
+      badReq    = SRequest defaultRequest{requestMethod="POST"} ""
 
   context "When everything is fine" $ do
-      let req = SRequest defaultRequest{requestMethod="POST"}
-                $ pack ("{\"description\":\"just shoes\",\"color\":\"red\","
-                        ++ "\"size\":\"35\",\"photo\":\"MTIzNAo=\"}")
       it "redirects to showShoes" $ \pool → do
         makeTable pool
-        simpleStatus <$> run pool req `shouldReturn` found302
+        simpleStatus <$> run pool goodReq `shouldReturn` found302
 
   context "When provided with invalid input" $ do
     it "reports bad request" $ \pool → do
-      let req = SRequest defaultRequest{requestMethod="POST"} ""
-      simpleStatus <$> run pool req `shouldReturn` badRequest400
+      simpleStatus <$> run pool badReq `shouldReturn` badRequest400
+
+  context "When db fails" $ do
+    it "reports internal server error" $ \pool → do
+      simpleStatus <$> run pool goodReq `shouldReturn` internalServerError500
 
 showShoesSpec ∷ Spec
 showShoesSpec = return ()
