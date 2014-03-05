@@ -23,7 +23,10 @@ import System.Directory
 
 import Test.Hspec
 
-import Web.Scotty.Trans
+import Text.HandsomeSoup
+import Text.XML.HXT.Core hiding (app)
+
+import Web.Scotty.Trans (scottyAppT, get, post)
 
 import Web.ZaloraTask.Controller hiding (Shoe)
 import Web.ZaloraTask.Model
@@ -105,6 +108,15 @@ showShoesSpec = describe "showShoes" $ do
   context "When requesting existing shoes" $ do
     it "reports ok" $ \pool →
       simpleStatus <$> run' (reqFor "/1") pool `shouldReturn` ok200
+    it "returns html with shoe data" $ \pool → do
+      html ← simpleBody <$> run' (reqFor "/1") pool
+      let cssText = css ⋙ (//>getText)
+          cssAttr sel = (css sel ⋙) ∘ getAttrValue
+      runLA (hreadDoc ⋙ (cssText "#description" &&& cssText "#color"
+                         &&& cssText "#size" &&& cssAttr "#photo" "src"))
+        (BS.unpack html)
+        `shouldBe` [("default shoes", ("black", ("43",
+                                                 "/" ++ photoName ++ ".jpg")))]
 
   context "When requesting non-existent shoes" $ do
     it "reports not found" $ \pool →

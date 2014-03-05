@@ -11,8 +11,10 @@ import Data.Aeson.TH
 import qualified Data.ByteString.Base64.Lazy as B64
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Char8 as BSC
+import Data.Char
 import Data.Functor
 import Data.Hex
+import qualified Data.Text as TS
 import Data.Text.Lazy (Text, append, fromStrict, pack, unpack)
 import Data.Text.Lazy.Encoding
 
@@ -22,6 +24,11 @@ import qualified Database.Persist.Sql as P
 import Network.HTTP.Types.Status
 
 import Prelude.Unicode
+
+import Text.Blaze.Html5 ((!), toHtml, toValue)
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+import Text.Blaze.Html.Renderer.Text
 
 import Web.PathPieces
 import Web.Scotty.Trans
@@ -64,13 +71,29 @@ makeShoes = do
 showShoes ∷ AppActionM Connection IO ()
 showShoes = do
   pool ← getPool
-  shoeId ← maybe (raise notFound404) return ∘ fromPathPiece =<< param "id"
+  shoeId' ← param "id"
+  shoeId ← maybe (raise notFound404) return $ (fromPathPiece ∘ TS.pack ∘ show
+                                               $ shoeId')
   shoe ← liftIO $ handle (\e → do
-                             return (e∷IOException)
+                             void $ return (e∷IOException)
                              return $ Left internalServerError500)
          $ ((flip runSqlPersistMPool pool (P.get shoeId) ∷ IO (Maybe M.Shoe))
             >>= return ∘ maybe (Left notFound404) Right)
-  either raise (text ∘ pack ∘ show) shoe
+  either raise (html ∘ display shoeId') shoe
+
+display ∷ Int → M.Shoe → Text
+display shoeId shoe = renderHtml $ H.docTypeHtml $ do
+  H.head $ do
+    H.title $ toHtml $ "Shoe #" ++ show shoeId
+  H.body $ do
+    forM_ [("description", M.shoeDescription), ("color", M.shoeColor),
+           ("size", pack ∘ show ∘ M.shoeSize)]
+      $ \(s, f) → H.p $ do
+      toHtml $ toUpper (head s) : map toLower (tail s) ++ ":"
+      H.div ! A.id (toValue s) $ toHtml $ f shoe
+    H.img ! A.id "photo" ! A.src (toValue ("/" `append` M.shoePhoto shoe
+                                           `append` ".jpg"))
+
 
 listShoes ∷ AppActionM Connection IO ()
 listShoes = return ()
