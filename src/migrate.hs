@@ -1,18 +1,18 @@
-{-# LANGUAGE NoMonomorphismRestriction, OverloadedStrings #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Main where
-
-import Control.Monad.Logger
 
 import Data.ByteString.Char8 (pack)
 
 import Database.Persist.Postgresql hiding (migrate)
 
+import Prelude.Unicode
+
 import System.Environment
 
-import Model
+import Web.ZaloraTask.Model
 
 main = do
   args <- getArgs
   withPostgresqlConn (pack $ head args) $ \conn ->
-    runNoLoggingT . flip runSqlConn conn $ runMigration migrate
+    flip runSqlPersistM conn $ runMigration migrate

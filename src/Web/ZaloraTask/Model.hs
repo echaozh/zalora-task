@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleContexts, GADTs, OverloadedStrings, QuasiQuotes #-}
+{-# LANGUAGE FlexibleContexts, GADTs, QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell, TypeFamilies #-}
 
-module Model where
+module Web.ZaloraTask.Model where
 
 import Data.Text.Lazy (Text)
 
