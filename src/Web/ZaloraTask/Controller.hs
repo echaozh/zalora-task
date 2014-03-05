@@ -6,6 +6,7 @@ import Control.Applicative
 import Control.Monad.Reader
 
 import Data.Aeson.TH
+import Data.Maybe
 import Data.Text.Lazy (Text, append, fromStrict, unpack)
 
 import Database.Persist.Sql hiding (get)
@@ -21,12 +22,12 @@ import qualified Web.ZaloraTask.Model as M
 import Web.ZaloraTask.Types
 
 data Shoe = Shoe {description ∷ Text, color ∷ Text, size ∷ Text, photo ∷ Text}
-            deriving (Eq, Show)
+          deriving (Eq, Show)
 $(deriveFromJSON defaultOptions ''Shoe)
 
 actions ∷ AppM Connection IO ()
 actions = do
-  handleAppError
+--  handleAppError
   post "/shoes"     makeShoes
   get  "/shoes/:id" showShoes
   get  "/shoes"     listShoes
@@ -40,10 +41,11 @@ prepare shoe = do
 makeShoes ∷ AppActionM Connection IO ()
 makeShoes = do
   pool ← lift ask
-  shoe ← jsonData `rescue` \_ → raise badRequest400
-  shoe' ← liftIO $ prepare shoe
-  shoeId ← liftIO $ unKey <$> (flip runSqlPersistMPool pool $ insert shoe')
-  redirect $ "/shoes/" `append` (fromStrict $ toPathPiece shoeId)
+  shoe ← (Just <$> jsonData) `rescue` \_ → status badRequest400 >> return Nothing
+  when (shoe ≢ Nothing) $ do
+    shoe' ← liftIO $ prepare $ fromJust shoe
+    shoeId ← liftIO $ unKey <$> (flip runSqlPersistMPool pool $ insert shoe')
+    redirect $ "/shoes/" `append` (fromStrict $ toPathPiece shoeId)
 
 showShoes ∷ AppActionM Connection IO ()
 showShoes = return ()
@@ -51,5 +53,5 @@ showShoes = return ()
 listShoes ∷ AppActionM Connection IO ()
 listShoes = return ()
 
-handleAppError ∷ Monad m ⇒ AppM conn m ()
-handleAppError = defaultHandler $ \e → status e
+-- handleAppError ∷ Monad m ⇒ AppM conn m ()
+-- handleAppError = defaultHandler $ \e → status e
