@@ -83,16 +83,20 @@ showShoes = do
 
 display ∷ Int → M.Shoe → Text
 display shoeId shoe = renderHtml $ H.docTypeHtml $ do
+  let title = toHtml $ "Shoe #" ++ show shoeId
   H.head $ do
-    H.title $ toHtml $ "Shoe #" ++ show shoeId
+    H.title $ title
+    H.style ! A.type_ "text/css" $ "label {margin-right: 20px}"
   H.body $ do
+    H.h1 title
+    H.p $ H.img ! A.id "photo" ! A.src (toValue ("/" `append` M.shoePhoto shoe
+                                                 `append` ".jpg"))
     forM_ [("description", M.shoeDescription), ("color", M.shoeColor),
            ("size", pack ∘ show ∘ M.shoeSize)]
       $ \(s, f) → H.p $ do
-      toHtml $ toUpper (head s) : map toLower (tail s) ++ ":"
-      H.div ! A.id (toValue s) $ toHtml $ f shoe
-    H.img ! A.id "photo" ! A.src (toValue ("/" `append` M.shoePhoto shoe
-                                           `append` ".jpg"))
+      H.label ! A.for (toValue s) $ H.strong $ toHtml
+        $ toUpper (head s) : map toLower (tail s) ++ ":"
+      H.span ! A.id (toValue s) $ toHtml $ f shoe
 
 
 listShoes ∷ AppActionM Connection IO ()
