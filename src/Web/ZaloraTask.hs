@@ -11,7 +11,7 @@ import Web.Scotty.Trans
 import Web.ZaloraTask.Controller
 import Web.ZaloraTask.Types
 
-zalora ∷ Port → ByteString → Int → IO ()
-zalora port connStr poolSize = do
+zalora ∷ Port → FilePath → ByteString → Int → IO ()
+zalora port dir connStr poolSize = do
   withPostgresqlPool connStr poolSize $ \pool →
-    scottyT port (runApp pool) (runApp pool) actions
+    scottyT port (runApp dir pool) (runApp dir pool) actions

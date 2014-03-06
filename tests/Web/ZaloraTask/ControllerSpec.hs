@@ -25,7 +25,7 @@ import Web.Scotty.Trans
 
 import Web.ZaloraTask.Controller
 import Web.ZaloraTask.Model
-import Web.ZaloraTask.Types
+import Web.ZaloraTask.Types hiding (photoDir, pool)
 
 withPool ∷ (ConnectionPool → IO a) -> (ConnectionPool → IO ()) -> IO ()
 withPool bef action =
@@ -37,21 +37,33 @@ makeTable = runSqlPersistMPool $ runMigration migrate
 dropTable ∷ ConnectionPool → IO ()
 dropTable = runSqlPersistMPool $ rawExecute "drop table shoe" []
 
+photoDir ∷ FilePath
+photoFile ∷ FilePath
+photoDir = "/tmp/zalora-task/"
+photoFile = "E7DF7CD2CA07F4F1AB415D457A6E1C13.jpg"
+
+photoRaw ∷ String
+photoEncoded ∷ String
+photoRaw = "1234\n"
+photoEncoded = "MTIzNAo="
+
 spec ∷ Spec
 spec =
-  after_ (removeFile "e7df7cd2ca07f4f1ab415d457a6e1c13"
-          `catch` \e → void $ return (e∷IOException))
+  before (createDirectoryIfMissing True photoDir)
+  $ after_ (removeDirectoryRecursive photoDir
+            `catch` \e → void $ return (e∷IOException))
   $ around (withPool makeTable)
   $ makeShoesSpec >> showShoesSpec >> listShoesSpec
 
 makeShoesSpec ∷ SpecWith ConnectionPool
 makeShoesSpec = describe "makeShoes" $ do
-  let app p     = scottyAppT (runApp p) (runApp p)
+  let app p     = scottyAppT (runApp photoDir p) (runApp photoDir p)
                   $ handleAppError >> post "/" makeShoes
       run p req = runSession (srequest req) =<< (app p)
       goodReq   = SRequest defaultRequest{requestMethod="POST"}
                   $ pack ("{\"description\":\"just shoes\",\"color\":\"red\","
-                          ++ "\"size\":\"35\",\"photo\":\"MTIzNAo=\"}")
+                          ++ "\"size\":\"35\",\"photo\":\"" ++ photoEncoded
+                          ++ "\"}")
       badReq    = SRequest defaultRequest{requestMethod="POST"} ""
 
   context "When everything is fine" $ do
@@ -61,7 +73,7 @@ makeShoesSpec = describe "makeShoes" $ do
 
       it "saves the photo to disk base 64 decoded" $ \pool → do
         void $ run pool goodReq
-        readFile "e7df7cd2ca07f4f1ab415d457a6e1c13" `shouldReturn` "1234\n"
+        readFile (photoDir ++ photoFile) `shouldReturn` photoRaw
 
   context "When provided with invalid input" $ do
     it "reports bad request" $ \pool → do

@@ -8,5 +8,5 @@ import Web.ZaloraTask
 
 main ∷ IO ()
 main = do
-  port : connStr : _ ← getArgs
-  zalora (read port) (BS.pack connStr) 10
+  port : dir : connStr : _ ← getArgs
+  zalora (read port) dir (BS.pack connStr) 10
