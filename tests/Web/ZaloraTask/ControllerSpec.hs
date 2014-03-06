@@ -110,5 +110,9 @@ showShoesSpec = describe "showShoes" $ do
     it "reports not found" $ \pool →
       simpleStatus <$> run' (reqFor "/100") pool `shouldReturn` notFound404
 
+  context "When requesting with an improper id" $ do
+    it "reports not found" $ \pool →
+      simpleStatus <$> run' (reqFor "/NaN") pool `shouldReturn` notFound404
+
 listShoesSpec ∷ SpecWith ConnectionPool
 listShoesSpec = return ()

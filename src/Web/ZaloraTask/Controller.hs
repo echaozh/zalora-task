@@ -17,6 +17,7 @@ import Data.Text.Lazy (Text, append, fromStrict, pack, unpack)
 import Data.Text.Lazy.Encoding
 
 import Database.Persist.Sql hiding (get)
+import qualified Database.Persist.Sql as P
 
 import Network.HTTP.Types.Status
 
@@ -55,13 +56,21 @@ makeShoes = do
   pool ← getPool
   shoe ← jsonData `rescue` \_ → raise badRequest400
   shoe' ← prepare shoe
-  path ← liftIO $ handle (\e → return (e∷IOException) >> return Nothing)
-         $ Just ∘ fromStrict ∘ toPathPiece ∘ unKey <$> ((flip runSqlPersistMPool
-                                                         $ pool) $ insert shoe')
-  maybe (raise internalServerError500) (redirect ∘ ("/shoes/"`append`)) path
+  shoeId ← liftIO $ handle (\e → return (e∷IOException) >> return Nothing)
+           $ Just ∘ fromStrict ∘ toPathPiece ∘ unKey
+           <$> flip runSqlPersistMPool pool (insert shoe')
+  maybe (raise internalServerError500) (redirect ∘ ("/shoes/"`append`)) shoeId
 
 showShoes ∷ AppActionM Connection IO ()
-showShoes = return ()
+showShoes = do
+  pool ← getPool
+  shoeId ← maybe (raise notFound404) return ∘ fromPathPiece =<< param "id"
+  shoe ← liftIO $ handle (\e → do
+                             return (e∷IOException)
+                             return $ Left internalServerError500)
+         $ ((flip runSqlPersistMPool pool (P.get shoeId) ∷ IO (Maybe M.Shoe))
+            >>= return ∘ maybe (Left notFound404) Right)
+  either raise (text ∘ pack ∘ show) shoe
 
 listShoes ∷ AppActionM Connection IO ()
 listShoes = return ()
