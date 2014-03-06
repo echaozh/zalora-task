@@ -1,4 +1,4 @@
-{-# LANGUAGE StandaloneDeriving, TemplateHaskell #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Web.ZaloraTask.Controller where
 
@@ -73,30 +73,29 @@ showShoes = do
   pool ← getPool
   shoeId' ← param "id"
   shoeId ← maybe (raise notFound404) return $ (fromPathPiece ∘ TS.pack ∘ show
-                                               $ shoeId')
+                                               $ (shoeId'∷Int))
   shoe ← liftIO $ handle (\e → do
                              void $ return (e∷IOException)
                              return $ Left internalServerError500)
          $ ((flip runSqlPersistMPool pool (P.get shoeId) ∷ IO (Maybe M.Shoe))
             >>= return ∘ maybe (Left notFound404) Right)
   either raise (html ∘ display shoeId') shoe
-
-display ∷ Int → M.Shoe → Text
-display shoeId shoe = renderHtml $ H.docTypeHtml $ do
-  let title = toHtml $ "Shoe #" ++ show shoeId
-  H.head $ do
-    H.title $ title
-    H.style ! A.type_ "text/css" $ "label {margin-right: 20px}"
-  H.body $ do
-    H.h1 title
-    H.p $ H.img ! A.id "photo" ! A.src (toValue ("/" `append` M.shoePhoto shoe
-                                                 `append` ".jpg"))
-    forM_ [("description", M.shoeDescription), ("color", M.shoeColor),
-           ("size", pack ∘ show ∘ M.shoeSize)]
-      $ \(s, f) → H.p $ do
-      H.label ! A.for (toValue s) $ H.strong $ toHtml
-        $ toUpper (head s) : map toLower (tail s) ++ ":"
-      H.span ! A.id (toValue s) $ toHtml $ f shoe
+  where
+    display shoeId shoe = renderHtml $ H.docTypeHtml $ do
+      let title = toHtml $ "Shoe #" ++ show shoeId
+      H.head $ do
+        H.title $ title
+        H.style ! A.type_ "text/css" $ "label {margin-right: 20px}"
+      H.body $ do
+        H.h1 title
+        H.p $ H.img ! A.id "photo"
+          ! A.src (toValue ("/" `append` M.shoePhoto shoe `append` ".jpg"))
+        forM_ [("description", M.shoeDescription), ("color", M.shoeColor),
+               ("size", pack ∘ show ∘ M.shoeSize)]
+          $ \(s, f) → H.p $ do
+          H.label ! A.for (toValue s) $ H.strong $ toHtml
+            $ toUpper (head s) : map toLower (tail s) ++ ":"
+          H.span ! A.id (toValue s) $ toHtml $ f shoe
 
 
 listShoes ∷ AppActionM Connection IO ()

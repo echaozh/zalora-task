@@ -42,7 +42,7 @@ defaultShoe = Shoe "default shoes" "black" 43 $ pack photoName
 fixture ∷ ConnectionPool → IO ()
 fixture = runSqlPersistMPool $ do
   runMigration migrate
-  void $ insert defaultShoe
+  replicateM_ 5 $ insert defaultShoe
 
 dropTable ∷ ConnectionPool → IO ()
 dropTable = runSqlPersistMPool $ rawExecute "drop table shoe" []
@@ -101,6 +101,18 @@ makeShoesSpec = describe "makeShoes" $ do
       dropTable pool
       simpleStatus <$> run' goodReq pool `shouldReturn` internalServerError500
 
+cssText ∷ String → LA XmlTree String
+cssText = css ⋙ (//>getText)
+
+cssAttr ∷ String → String → LA XmlTree String
+cssAttr sel = (css sel ⋙) ∘ getAttrValue
+
+runAndHXT ∷ (SRequest → ConnectionPool → IO SResponse)
+          → SRequest → ConnectionPool → LA String b -> IO [b]
+runAndHXT run' req pool hxt = do
+  html' ← simpleBody <$> run' req pool
+  return $ runLA hxt $ BS.unpack html'
+
 showShoesSpec ∷ SpecWith ConnectionPool
 showShoesSpec = describe "showShoes" $ do
   let run'    = run $ get "/:id" showShoes
@@ -108,15 +120,12 @@ showShoesSpec = describe "showShoes" $ do
   context "When requesting existing shoes" $ do
     it "reports ok" $ \pool →
       simpleStatus <$> run' (reqFor "/1") pool `shouldReturn` ok200
-    it "returns html with shoe data" $ \pool → do
-      html ← simpleBody <$> run' (reqFor "/1") pool
-      let cssText = css ⋙ (//>getText)
-          cssAttr sel = (css sel ⋙) ∘ getAttrValue
-      runLA (hreadDoc ⋙ (cssText "#description" &&& cssText "#color"
-                         &&& cssText "#size" &&& cssAttr "#photo" "src"))
-        (BS.unpack html)
-        `shouldBe` [("default shoes", ("black", ("43",
-                                                 "/" ++ photoName ++ ".jpg")))]
+    it "returns html with shoe data" $ \pool →
+      (runAndHXT run' (reqFor "/1") pool
+       $ hreadDoc ⋙ (cssText "#description" &&& cssText "#color"
+                     &&& cssText "#size" &&& cssAttr "#photo" "src"))
+      `shouldReturn` [("default shoes", ("black",
+                                         ("43", "/" ++ photoName ++ ".jpg")))]
 
   context "When requesting non-existent shoes" $ do
     it "reports not found" $ \pool →
@@ -126,5 +135,61 @@ showShoesSpec = describe "showShoes" $ do
     it "reports not found" $ \pool →
       simpleStatus <$> run' (reqFor "/NaN") pool `shouldReturn` notFound404
 
+shoeList ∷ Int → Int → [(String, (String, String))]
+shoeList from to = [("Shoe #" ++ show n, ("/shoes/" ++ show n,
+                                          "/" ++ photoName ++ ".jpg"))
+                    | n ← [from .. to]]
+
 listShoesSpec ∷ SpecWith ConnectionPool
-listShoesSpec = return ()
+listShoesSpec = describe "listShoes" $ do
+  let run'    = run $ get "/" showShoes
+
+  context "Without paging" $ do
+    it "links to all shoes" $ \pool →
+      (runAndHXT run' (reqFor "/") pool
+       $ hreadDoc ⋙ (cssText ".shoe" &&& cssAttr ".link" "href"
+                     &&& cssAttr ".photo" "src"))
+      `shouldReturn` shoeList 1 5
+
+  context "With paging" $ do
+    it "links to shoes on current page" $ \pool → do
+      (runAndHXT run' (reqFor "/?p=2") pool
+       $ hreadDoc ⋙ (cssText ".shoe" &&& cssAttr ".link" "href"
+                     &&& cssAttr ".photo" "src"))
+        `shouldReturn` shoeList 3 4
+      (runAndHXT run' (reqFor "/?p=3") pool
+       $ hreadDoc ⋙ (cssText ".shoe" &&& cssAttr ".link" "href"
+                     &&& cssAttr ".photo" "src"))
+        `shouldReturn` shoeList 5 5
+
+    context "and page number is not right" $
+      it "reports not found" $ \pool →
+      simpleStatus <$> run' (reqFor "/NaN") pool `shouldReturn` notFound404
+
+    context "and a previous page" $
+      it "links to that" $ \pool → do
+        (runAndHXT run' (reqFor "/?p=2") pool
+         $ hreadDoc ⋙ cssAttr ".prev" "href")
+          `shouldReturn` ["/?p=1"]
+        (runAndHXT run' (reqFor "/?p=3") pool
+         $ hreadDoc ⋙ cssAttr ".prev" "href")
+          `shouldReturn` ["/?p=2"]
+
+    context "and a next page" $
+      it "links to next page if there is one" $ \pool → do
+        (runAndHXT run' (reqFor "/?p=1") pool
+         $ hreadDoc ⋙ cssAttr ".prev" "href")
+          `shouldReturn` ["/?p=2"]
+        (runAndHXT run' (reqFor "/?p=2") pool
+         $ hreadDoc ⋙ cssAttr ".prev" "href")
+          `shouldReturn` ["/?p=3"]
+
+    context "and no previous page" $
+      it "doesn't have previous link" $ \pool →
+      (runAndHXT run' (reqFor "/?p=1") pool $ hreadDoc ⋙ cssAttr ".prev" "href")
+      `shouldReturn` []
+
+    context "and no next page" $
+      it "doesn't have next link" $ \pool →
+      (runAndHXT run' (reqFor "/?p=3") pool $ hreadDoc ⋙ cssAttr ".prev" "href")
+      `shouldReturn` []

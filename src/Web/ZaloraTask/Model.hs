@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleContexts, GADTs, QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts, GADTs, QuasiQuotes, TypeFamilies #-}
 
 module Web.ZaloraTask.Model where
 
