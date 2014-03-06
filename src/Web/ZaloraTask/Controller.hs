@@ -44,10 +44,11 @@ prepare shoe = do
   photo' <- either (const $ raise badRequest400) return $ B64.decode $ encodeUtf8
             $ photo shoe
   dir <- getPhotoDir
-  let path = dir ++ (BSC.unpack $ hex $ hash $ BS.toStrict photo') ++ ".jpg"
+  let name = BSC.unpack $ hex $ hash $ BS.toStrict photo'
+  let path = dir ++ name ++ ".jpg"
   liftIO $ BS.writeFile path photo'
   return $ M.Shoe (description shoe) (color shoe) (read ∘ unpack $ size shoe)
-    $ pack path
+    $ pack name
 
 makeShoes ∷ AppActionM Connection IO ()
 makeShoes = do

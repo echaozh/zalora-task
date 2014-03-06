@@ -6,9 +6,11 @@ import Control.Arrow.Unicode
 import Control.Exception
 import Control.Monad
 
-import Data.ByteString.Lazy.Char8 (pack)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy.Char8 as BS
+import Data.Text.Lazy (pack)
 
-import Database.Persist.Sqlite hiding (migrate)
+import Database.Persist.Sqlite hiding (get, migrate)
 
 import Network.HTTP.Types.Header
 import Network.HTTP.Types.Status
@@ -23,7 +25,7 @@ import Test.Hspec
 
 import Web.Scotty.Trans
 
-import Web.ZaloraTask.Controller
+import Web.ZaloraTask.Controller hiding (Shoe)
 import Web.ZaloraTask.Model
 import Web.ZaloraTask.Types hiding (photoDir, pool)
 
@@ -31,16 +33,21 @@ withPool ∷ (ConnectionPool → IO a) -> (ConnectionPool → IO ()) -> IO ()
 withPool bef action =
   withSqlitePool ":memory:" 1 $ bef &&& action ⋙ arr (uncurry (>>))
 
-makeTable ∷ ConnectionPool → IO ()
-makeTable = runSqlPersistMPool $ runMigration migrate
+defaultShoe ∷ Shoe
+defaultShoe = Shoe "default shoes" "black" 43 $ pack photoName
+
+fixture ∷ ConnectionPool → IO ()
+fixture = runSqlPersistMPool $ do
+  runMigration migrate
+  void $ insert defaultShoe
 
 dropTable ∷ ConnectionPool → IO ()
 dropTable = runSqlPersistMPool $ rawExecute "drop table shoe" []
 
 photoDir ∷ FilePath
-photoFile ∷ FilePath
+photoName ∷ FilePath
 photoDir = "/tmp/zalora-task/"
-photoFile = "E7DF7CD2CA07F4F1AB415D457A6E1C13.jpg"
+photoName = "E7DF7CD2CA07F4F1AB415D457A6E1C13"
 
 photoRaw ∷ String
 photoEncoded ∷ String
@@ -52,40 +59,56 @@ spec =
   before (createDirectoryIfMissing True photoDir)
   $ after_ (removeDirectoryRecursive photoDir
             `catch` \e → void $ return (e∷IOException))
-  $ around (withPool makeTable)
+  $ around (withPool fixture)
   $ makeShoesSpec >> showShoesSpec >> listShoesSpec
+
+run ∷ AppM Connection IO () → SRequest → ConnectionPool → IO SResponse
+run act req p = runSession (srequest req) =<< app
+  where app = scottyAppT (runApp photoDir p) (runApp photoDir p)
+              $ handleAppError >> act
+
+reqFor ∷ ByteString → SRequest
+reqFor = flip SRequest "" ∘ setPath defaultRequest
 
 makeShoesSpec ∷ SpecWith ConnectionPool
 makeShoesSpec = describe "makeShoes" $ do
-  let app p     = scottyAppT (runApp photoDir p) (runApp photoDir p)
-                  $ handleAppError >> post "/" makeShoes
-      run p req = runSession (srequest req) =<< (app p)
-      goodReq   = SRequest defaultRequest{requestMethod="POST"}
-                  $ pack ("{\"description\":\"just shoes\",\"color\":\"red\","
-                          ++ "\"size\":\"35\",\"photo\":\"" ++ photoEncoded
-                          ++ "\"}")
-      badReq    = SRequest defaultRequest{requestMethod="POST"} ""
+  let run'    = run $ post "/" makeShoes
+      goodReq = SRequest defaultRequest{requestMethod="POST"}
+                $ BS.pack ("{\"description\":\"just shoes\",\"color\":\"red\","
+                           ++ "\"size\":\"35\",\"photo\":\"" ++ photoEncoded
+                           ++ "\"}")
+      badReq  = SRequest defaultRequest{requestMethod="POST"} ""
 
   context "When everything is fine" $ do
-      it "redirects to showShoes" $ \pool → do
+      it "redirects to showShoes" $ \pool →
         ((simpleStatus &&& (lookup hLocation ∘ simpleHeaders))
-         <$> run pool goodReq) `shouldReturn` (found302, Just "/shoes/1")
+         <$> run' goodReq pool)
+        `shouldReturn` (found302, Just "/shoes/2")
 
       it "saves the photo to disk base 64 decoded" $ \pool → do
-        void $ run pool goodReq
-        readFile (photoDir ++ photoFile) `shouldReturn` photoRaw
+        void $ run' goodReq pool
+        readFile (photoDir ++ photoName ++ ".jpg") `shouldReturn` photoRaw
 
   context "When provided with invalid input" $ do
-    it "reports bad request" $ \pool → do
-      simpleStatus <$> run pool badReq `shouldReturn` badRequest400
+    it "reports bad request" $ \pool →
+      simpleStatus <$> run' badReq pool `shouldReturn` badRequest400
 
   context "When db fails" $ do
     it "reports internal server error" $ \pool → do
       dropTable pool
-      simpleStatus <$> run pool goodReq `shouldReturn` internalServerError500
+      simpleStatus <$> run' goodReq pool `shouldReturn` internalServerError500
 
 showShoesSpec ∷ SpecWith ConnectionPool
-showShoesSpec = return ()
+showShoesSpec = describe "showShoes" $ do
+  let run'    = run $ get "/:id" showShoes
+
+  context "When requesting existing shoes" $ do
+    it "reports ok" $ \pool →
+      simpleStatus <$> run' (reqFor "/1") pool `shouldReturn` ok200
+
+  context "When requesting non-existent shoes" $ do
+    it "reports not found" $ \pool →
+      simpleStatus <$> run' (reqFor "/100") pool `shouldReturn` notFound404
 
 listShoesSpec ∷ SpecWith ConnectionPool
 listShoesSpec = return ()
