@@ -67,8 +67,9 @@ spec =
 
 run ∷ AppM Connection IO () → SRequest → ConnectionPool → IO SResponse
 run act req p = runSession (srequest req) =<< app
-  where app = scottyAppT (runApp photoDir p) (runApp photoDir p)
-              $ handleAppError >> act
+  where
+    app = scottyAppT (runApp config) (runApp config) $ handleAppError >> act
+    config = AppConfig photoDir p 2
 
 reqFor ∷ ByteString → SRequest
 reqFor = flip SRequest "" ∘ setPath defaultRequest
@@ -86,7 +87,7 @@ makeShoesSpec = describe "makeShoes" $ do
       it "redirects to showShoes" $ \pool →
         ((simpleStatus &&& (lookup hLocation ∘ simpleHeaders))
          <$> run' goodReq pool)
-        `shouldReturn` (found302, Just "/shoes/2")
+        `shouldReturn` (found302, Just "/shoes/6")
 
       it "saves the photo to disk base 64 decoded" $ \pool → do
         void $ run' goodReq pool
@@ -142,9 +143,9 @@ shoeList from to = [("Shoe #" ++ show n, ("/shoes/" ++ show n,
 
 listShoesSpec ∷ SpecWith ConnectionPool
 listShoesSpec = describe "listShoes" $ do
-  let run'    = run $ get "/" showShoes
-
   context "Without paging" $ do
+    let run'    = run $ get "/" listAllShoes
+
     it "links to all shoes" $ \pool →
       (runAndHXT run' (reqFor "/") pool
        $ hreadDoc ⋙ (cssText ".shoe" &&& cssAttr ".link" "href"
@@ -152,7 +153,10 @@ listShoesSpec = describe "listShoes" $ do
       `shouldReturn` shoeList 1 5
 
   context "With paging" $ do
+    let run'    = run $ get "/" listShoes
+
     it "links to shoes on current page" $ \pool → do
+      run' (reqFor "/?p=2") pool >>= print
       (runAndHXT run' (reqFor "/?p=2") pool
        $ hreadDoc ⋙ (cssText ".shoe" &&& cssAttr ".link" "href"
                      &&& cssAttr ".photo" "src"))
@@ -164,32 +168,34 @@ listShoesSpec = describe "listShoes" $ do
 
     context "and page number is not right" $
       it "reports not found" $ \pool →
-      simpleStatus <$> run' (reqFor "/NaN") pool `shouldReturn` notFound404
+      simpleStatus <$> run' (reqFor "/?=NaN") pool `shouldReturn` notFound404
 
     context "and a previous page" $
       it "links to that" $ \pool → do
         (runAndHXT run' (reqFor "/?p=2") pool
-         $ hreadDoc ⋙ cssAttr ".prev" "href")
-          `shouldReturn` ["/?p=1"]
+         $ hreadDoc ⋙ cssAttr "#prev" "href")
+          `shouldReturn` ["/shoes?p=1"]
         (runAndHXT run' (reqFor "/?p=3") pool
-         $ hreadDoc ⋙ cssAttr ".prev" "href")
-          `shouldReturn` ["/?p=2"]
+         $ hreadDoc ⋙ cssAttr "#prev" "href")
+          `shouldReturn` ["/shoes?p=2"]
 
     context "and a next page" $
       it "links to next page if there is one" $ \pool → do
         (runAndHXT run' (reqFor "/?p=1") pool
-         $ hreadDoc ⋙ cssAttr ".prev" "href")
-          `shouldReturn` ["/?p=2"]
+         $ hreadDoc ⋙ cssAttr "#next" "href")
+          `shouldReturn` ["/shoes?p=2"]
         (runAndHXT run' (reqFor "/?p=2") pool
-         $ hreadDoc ⋙ cssAttr ".prev" "href")
-          `shouldReturn` ["/?p=3"]
+         $ hreadDoc ⋙ cssAttr "#next" "href")
+          `shouldReturn` ["/shoes?p=3"]
 
     context "and no previous page" $
       it "doesn't have previous link" $ \pool →
-      (runAndHXT run' (reqFor "/?p=1") pool $ hreadDoc ⋙ cssAttr ".prev" "href")
+      (runAndHXT run' (reqFor "/?p=1") pool $ hreadDoc
+       ⋙ cssAttr "#prev" "href")
       `shouldReturn` []
 
     context "and no next page" $
       it "doesn't have next link" $ \pool →
-      (runAndHXT run' (reqFor "/?p=3") pool $ hreadDoc ⋙ cssAttr ".prev" "href")
+      (runAndHXT run' (reqFor "/?p=3") pool $ hreadDoc
+       ⋙ cssAttr "#next" "href")
       `shouldReturn` []

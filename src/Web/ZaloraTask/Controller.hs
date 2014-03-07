@@ -15,9 +15,10 @@ import Data.Char
 import Data.Functor
 import Data.Hex
 import qualified Data.Text as TS
-import Data.Text.Lazy (Text, append, fromStrict, pack, unpack)
+import Data.Text.Lazy (Text, append, fromStrict, pack, toStrict, unpack)
 import Data.Text.Lazy.Encoding
 
+import Database.Esqueleto hiding (get)
 import Database.Persist.Sql hiding (get)
 import qualified Database.Persist.Sql as P
 
@@ -46,6 +47,7 @@ actions = do
   post "/shoes"     makeShoes
   get  "/shoes/:id" showShoes
   get  "/shoes"     listShoes
+  get  "/shoes"     listAllShoes
 
 prepare ∷ Shoe → AppActionM Connection IO M.Shoe
 prepare shoe = do
@@ -55,34 +57,33 @@ prepare shoe = do
   let name = BSC.unpack $ hex $ hash $ BS.toStrict photo'
   let path = dir ++ name ++ ".jpg"
   liftIO $ BS.writeFile path photo'
-  return $ M.Shoe (description shoe) (color shoe) (read ∘ unpack $ size shoe)
-    $ pack name
+  shoeSize <- either (const $ raise badRequest400) return $ readEither
+              $ size shoe
+  return $ M.Shoe (description shoe) (color shoe) shoeSize (pack name)
+
+runSqlM ∷ ConnectionPool → SqlPersistM a → AppActionM Connection IO a
+runSqlM pool sql = do
+  r ← liftIO $ handle (\e → return (e∷IOException) >> return Nothing)
+      $  (Just <$>) $ runSqlPersistMPool sql pool
+  maybe (raise internalServerError500) return r
 
 makeShoes ∷ AppActionM Connection IO ()
 makeShoes = do
+  shoe ← jsonData `rescue` const raise badRequest400
   pool ← getPool
-  shoe ← jsonData `rescue` \_ → raise badRequest400
-  shoe' ← prepare shoe
-  shoeId ← liftIO $ handle (\e → return (e∷IOException) >> return Nothing)
-           $ Just ∘ fromStrict ∘ toPathPiece ∘ unKey
-           <$> flip runSqlPersistMPool pool (insert shoe')
-  maybe (raise internalServerError500) (redirect ∘ ("/shoes/"`append`)) shoeId
+  shoeId ← prepare shoe >>= runSqlM pool ∘ insert
+  redirect $ "/shoes/" `append` (fromStrict ∘ toPathPiece ∘ unKey $ shoeId)
 
 showShoes ∷ AppActionM Connection IO ()
 showShoes = do
-  pool ← getPool
   shoeId' ← param "id"
-  shoeId ← maybe (raise notFound404) return $ (fromPathPiece ∘ TS.pack ∘ show
-                                               $ (shoeId'∷Int))
-  shoe ← liftIO $ handle (\e → do
-                             void $ return (e∷IOException)
-                             return $ Left internalServerError500)
-         $ ((flip runSqlPersistMPool pool (P.get shoeId) ∷ IO (Maybe M.Shoe))
-            >>= return ∘ maybe (Left notFound404) Right)
-  either raise (html ∘ display shoeId') shoe
+  pool ← getPool
+  shoeId ← maybe (raise notFound404) return $ fromPathPiece $ toStrict shoeId'
+  runSqlM pool (P.get shoeId)
+    >>= maybe (raise notFound404) (html ∘ renderHtml ∘ display shoeId')
   where
-    display shoeId shoe = renderHtml $ H.docTypeHtml $ do
-      let title = toHtml $ "Shoe #" ++ show shoeId
+    display shoeId shoe = H.docTypeHtml $ do
+      let title = toHtml $ "Shoe #" `append` shoeId
       H.head $ do
         H.title $ title
         H.style ! A.type_ "text/css" $ "label {margin-right: 20px}"
@@ -97,9 +98,54 @@ showShoes = do
             $ toUpper (head s) : map toLower (tail s) ++ ":"
           H.span ! A.id (toValue s) $ toHtml $ f shoe
 
+listPage nav shoes = html ∘ renderHtml ∘ H.docTypeHtml $ do
+  let title = "Shoe Listing"
+  H.head $ do
+    H.title title
+    H.style ! A.type_ "text/css"
+      $ ".shoeBox {border: 1px solid; padding: 10px; display: inline;}"
+    H.style ! A.type_ "text/css" $ ".photo {height: 200px; width: 200px;}"
+  H.body $ do
+    H.h1 title
+    nav
+    shoes
+
+displayNav page pages = H.nav $ do
+  when (page > 1) $ (H.a ! A.id "prev"
+                     ! A.href (toValue $ "/shoes?p=" ++ show (page - 1))
+                     $ "Previous Page")
+  when (page < pages) $ (H.a ! A.id "next"
+                         ! A.href (toValue $ "/shoes?p=" ++ show (page + 1))
+                         $ "Next Page")
+
+displayList shoes = H.div $ forM_ shoes $ \(Entity key shoe) →
+  let appendKey = (`TS.append` toPathPiece (unKey key))
+  in H.a ! A.class_ "link" ! A.href (toValue $ appendKey "/shoes/")
+     $ H.figure ! A.class_ "shoeBox" $ do
+    H.img ! A.class_ "photo"
+      ! A.src (toValue ("/" `append` M.shoePhoto shoe `append` ".jpg"))
+    H.figcaption ! A.class_ "shoe" $ toHtml $ appendKey "Shoe #"
 
 listShoes ∷ AppActionM Connection IO ()
-listShoes = return ()
+listShoes = do
+  page ← param "p"
+  liftIO $ print page
+  pool ← getPool
+  psize ← getPageSize
+  let intConv = fromInteger ∘ toInteger
+  shoes ← runSqlM pool (select
+                        $ from $ \shoe → do
+                          orderBy [asc $ shoe ^. M.ShoeId]
+                          offset $ intConv $ psize * (page - 1)
+                          limit $ intConv psize
+                          return shoe)
+  liftIO $ print shoes
+  total ← runSqlM pool $ P.count ([]∷[f (M.ShoeGeneric b)])
+  liftIO $ print total
+  listPage (displayNav page (total `div` psize)) (displayList shoes)
+
+listAllShoes ∷ AppActionM Connection IO ()
+listAllShoes = return ()
 
 handleAppError ∷ Monad m ⇒ AppM conn m ()
 handleAppError = defaultHandler $ \e → status e

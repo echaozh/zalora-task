@@ -53,7 +53,8 @@ By my convention, the directory setting and connection pool are gathered into a
 record type called `AppConfig`. I am also trying out `lenses`, so I'll make some.
 
 > -- config is read-only, state is read-write
-> data AppConfig conn = AppConfig {_photoDir ∷ FilePath, _pool ∷ Pool conn}
+> data AppConfig conn = AppConfig {_photoDir ∷ FilePath, _pool ∷ Pool conn,
+>                                  _pageSize ∷ Int}
 > $(makeLenses ''AppConfig)
 
 The `App` monad carries the configurations around.
@@ -69,7 +70,9 @@ with an abnormal status code. So let's make `Status` as an instance of the
 status code with the default reason message.
 
 > instance ScottyError Status where
->   stringError = toEnum ∘ read
+>   -- for now, Scotty only `raise`s when input is bad
+>   stringError = either (const badRequest400) id ∘ (toEnum<$>) ∘ readEither
+>                 ∘ pack
 >   showError   = pack ∘ show
 
 The wrapped application and action monads. Notice the `Status` as the error type
@@ -81,8 +84,8 @@ base monad, which may, most likely, be the IO monad.
 > type AppM       conn m = ScottyT Status (App conn m)
 > type AppActionM conn m = ActionT Status (App conn m)
 >
-> runApp ∷ Monad m ⇒ FilePath → Pool conn → App conn m a → m a
-> runApp dir pool = flip runReaderT (AppConfig (dir ++ "/") pool) ∘ unApp
+> runApp ∷ Monad m ⇒ AppConfig conn → App conn m a → m a
+> runApp config = flip runReaderT (config & photoDir %~ (++"/")) ∘ unApp
 
 Configuratin accessors for web actions.
 
@@ -91,3 +94,6 @@ Configuratin accessors for web actions.
 >
 > getPhotoDir ∷ (MonadTrans t, Monad m) ⇒ t (App conn m) FilePath
 > getPhotoDir = lift ∘ view $ photoDir
+>
+> getPageSize ∷ (MonadTrans t, Monad m) ⇒ t (App conn m) Int
+> getPageSize = lift ∘ view $ pageSize
