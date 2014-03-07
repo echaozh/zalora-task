@@ -4,7 +4,7 @@
 
   -->
 
-> module Web.ZaloraTask.Controller where
+> module Web.ZaloraTask.Controller (routes) where
 
 All business logic resides here, as the controller part of MVC. `routes` is the
 only function this module need to export for the server program. However, for
