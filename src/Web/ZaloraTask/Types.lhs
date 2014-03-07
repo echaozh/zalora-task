@@ -63,6 +63,11 @@ For now, unless you go to wild pages out of control of the `Controller` and land
 on a Scotty generated 404 page, you will only see the status code with the
 default reason message.
 
+Scotty may `raise` its own error with a string instead of a status number.
+Fortunately, the present implementation only `raise`s when parsing inputs fails.
+Therefore, for now, all Scotty errors are translated directly into bad request
+errors.
+
 > instance ScottyError Status where
 >   -- for now, Scotty only `raise`s when input is bad
 >   stringError = either (const badRequest400) id . (toEnum<$>) . readEither

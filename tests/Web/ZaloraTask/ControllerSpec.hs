@@ -30,6 +30,7 @@ import Text.XML.HXT.Core hiding (app)
 
 import Web.Scotty.Trans (scottyAppT, get, post)
 
+import Web.ZaloraTask
 import Web.ZaloraTask.Controller hiding (Shoe)
 import Web.ZaloraTask.Model
 import Web.ZaloraTask.Types hiding (photoDir, pool)

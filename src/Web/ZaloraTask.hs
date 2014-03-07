@@ -1,8 +1,11 @@
-module Web.ZaloraTask (zalora) where
+module Web.ZaloraTask (
+  zalora,
+  -- exported for testing purpose
+  handleAppError) where
 
 import Data.ByteString (ByteString)
 
-import Database.Persist.Postgresql (withPostgresqlPool)
+import Database.Persist.Postgresql (Connection, withPostgresqlPool)
 
 import Network.Wai.Handler.Warp (Port)
 
@@ -13,6 +16,11 @@ import Web.ZaloraTask.Types
 
 zalora :: Port -> FilePath -> ByteString -> Int -> Int -> IO ()
 zalora port dir connStr poolSize pgSize = do
-  withPostgresqlPool connStr poolSize $ \pool ->
-    let config = AppConfig dir pool pgSize
-    in scottyT port (runApp config) (runApp config) actions
+  withPostgresqlPool connStr poolSize $ \p ->
+    let config = AppConfig dir p pgSize
+    in scottyT port (runApp config) (runApp config) $ do
+      handleAppError
+      routes
+
+handleAppError :: AppM Connection IO ()
+handleAppError = defaultHandler $ \e -> status e

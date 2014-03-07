@@ -8,5 +8,5 @@ import Web.ZaloraTask
 
 main :: IO ()
 main = do
-  port : dir : connStr : _ <- getArgs
-  zalora (read port) dir (BS.pack connStr) 10 100
+  port : dir : connStr : pgSize : _ <- getArgs
+  zalora (read port) dir (BS.pack connStr) 10 (read pgSize)
