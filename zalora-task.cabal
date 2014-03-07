@@ -59,8 +59,8 @@ test-suite zalora-spec
   default-language:    Haskell2010
   default-extensions:  FlexibleInstances, OverloadedStrings, TemplateHaskell,
                        UnicodeSyntax
-  build-depends:       base >=4.6 && <5.7, transformers >=0.3 && <0.4,
-                       mtl >=2.1 && <2.2,
+  build-depends:       base >=4.6 && <5.7, composition >=1.0 && <1.1,
+                       transformers >=0.3 && <0.4, mtl >=2.1 && <2.2,
                        base-unicode-symbols >=0.2 && <0.3,
                        lens >= 3.10 && <4.0,
                        bytestring >= 0.10 && <0.11,

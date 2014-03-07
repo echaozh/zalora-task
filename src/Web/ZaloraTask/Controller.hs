@@ -14,12 +14,12 @@ import qualified Data.ByteString.Char8 as BSC
 import Data.Char
 import Data.Functor
 import Data.Hex
+import Data.Ratio ((%))
 import qualified Data.Text as TS
-import Data.Text.Lazy (Text, append, fromStrict, pack, toStrict, unpack)
+import Data.Text.Lazy (Text, append, fromStrict, pack, toStrict)
 import Data.Text.Lazy.Encoding
 
-import Database.Esqueleto hiding (get)
-import Database.Persist.Sql hiding (get)
+import Database.Esqueleto hiding ((%), get)
 import qualified Database.Persist.Sql as P
 
 import Network.HTTP.Types.Status
@@ -98,6 +98,7 @@ showShoes = do
             $ toUpper (head s) : map toLower (tail s) ++ ":"
           H.span ! A.id (toValue s) $ toHtml $ f shoe
 
+listPage :: H.Html -> H.Html -> AppActionM Connection IO ()
 listPage nav shoes = html ∘ renderHtml ∘ H.docTypeHtml $ do
   let title = "Shoe Listing"
   H.head $ do
@@ -110,6 +111,7 @@ listPage nav shoes = html ∘ renderHtml ∘ H.docTypeHtml $ do
     nav
     shoes
 
+displayNav :: Int -> Int -> H.Html
 displayNav page pages = H.nav $ do
   when (page > 1) $ (H.a ! A.id "prev"
                      ! A.href (toValue $ "/shoes?p=" ++ show (page - 1))
@@ -118,6 +120,7 @@ displayNav page pages = H.nav $ do
                          ! A.href (toValue $ "/shoes?p=" ++ show (page + 1))
                          $ "Next Page")
 
+displayList :: [Entity (M.ShoeGeneric backend)] -> H.Html
 displayList shoes = H.div $ forM_ shoes $ \(Entity key shoe) →
   let appendKey = (`TS.append` toPathPiece (unKey key))
   in H.a ! A.class_ "link" ! A.href (toValue $ appendKey "/shoes/")
@@ -128,24 +131,30 @@ displayList shoes = H.div $ forM_ shoes $ \(Entity key shoe) →
 
 listShoes ∷ AppActionM Connection IO ()
 listShoes = do
-  page ← param "p"
-  liftIO $ print page
+  page' ← param "p"
+  page <- either (const $ raise badRequest400) return $ readEither page'
   pool ← getPool
   psize ← getPageSize
   let intConv = fromInteger ∘ toInteger
+  total ← runSqlM pool $ P.count ([]∷[f (M.ShoeGeneric b)])
+  shoes ← if page ≤ 0 ∨ (psize ⋅ (page - 1) > total ∧ (total ≢ 0 ∨ page ≢ 1))
+    then raise notFound404
+    else runSqlM pool (select
+                       $ from $ \shoe → do
+                         orderBy [asc $ shoe ^. M.ShoeId]
+                         offset $ intConv $ psize * (page - 1)
+                         limit $ intConv psize
+                         return shoe)
+  listPage (displayNav page (ceiling $ total % psize)) (displayList shoes)
+
+listAllShoes ∷ AppActionM Connection IO ()
+listAllShoes = do
+  pool <- getPool
   shoes ← runSqlM pool (select
                         $ from $ \shoe → do
                           orderBy [asc $ shoe ^. M.ShoeId]
-                          offset $ intConv $ psize * (page - 1)
-                          limit $ intConv psize
                           return shoe)
-  liftIO $ print shoes
-  total ← runSqlM pool $ P.count ([]∷[f (M.ShoeGeneric b)])
-  liftIO $ print total
-  listPage (displayNav page (total `div` psize)) (displayList shoes)
-
-listAllShoes ∷ AppActionM Connection IO ()
-listAllShoes = return ()
+  listPage (return ()) (displayList shoes)
 
 handleAppError ∷ Monad m ⇒ AppM conn m ()
 handleAppError = defaultHandler $ \e → status e
