@@ -94,28 +94,14 @@ You will find the sample `nginx.conf` at the root of the repo.
 >   get  "/shoes"     listShoes
 >   get  "/shoes"     listAllShoes
 
-A helper function to wrap the database access which may throw `IOException`s.
-Haskell exceptions are not type safe, as the code without exception handling can
-compile but may fail at runtime. This is bad because you don't always know what
-may get thrown at your face, and the documents are not always helpful in this
-matter.
-
-`IOExcetion`s are always internal server errors, so we raise them directly.
-
-> runSqlM :: ConnectionPool -> SqlPersistM a -> AppActionM Connection IO a
-> runSqlM pool sql = do
->   r <- liftIO $ handle (\e -> return (e::IOException) >> return Nothing)
->        $  (Just <$>) $ runSqlPersistMPool sql pool
->   maybe (raise internalServerError500) return r
+Scotty handles parsing of the JSON data from the request body, but it may throw
+when the parsing fails. However, all errors are automatically translated into
+bad request errors, so we don't need to handle them here.
 
 When dealing with string types, treating them all as `Monoid` instances makes
 the code polymorphic and better tolerate underlying implemention changes. No
 matter what you're using, `String`, `ByteString`s, or `Text`s, `<>` will always
 work, and can be imported from the same old module.
-
-Scotyy handles parsing of the JSON data from the request body, but it may throw
-when the parsing fails. However, all errors are automatically translated into
-bad request errors, so we don't need to handle them here.
 
 > makeShoes :: AppActionM Connection IO ()
 > makeShoes = do
@@ -134,7 +120,7 @@ bad request errors, so we don't need to handle them here.
 >     shoeSize <- either (const $ raise badRequest400) return $ readEither
 >                 $ size shoe
 >     return $ M.Shoe (description shoe) (color shoe) shoeSize (pack name)
-
+>
 > showShoes :: AppActionM Connection IO ()
 > showShoes = do
 >   shoeId' <- param "id"
@@ -171,3 +157,18 @@ bad request errors, so we don't need to handle them here.
 >                            orderBy [asc $ shoe ^. M.ShoeId]
 >                            return shoe)
 >   html $ listLayout (return ()) (listPartial shoes)
+
+Helper function to wrap the database access which may throw `IOException`s.
+Haskell exceptions are not type safe, as the code without exception handlers can
+compile but may fail at runtime. This is bad because you don't always know what
+may get thrown at your face, and the documents are not always helpful in this
+matter.
+
+`IOExcetion`s are always internal server errors, so we raise them directly.
+
+> runSqlM :: ConnectionPool -> SqlPersistM a -> AppActionM Connection IO a
+> runSqlM pool sql = do
+>   r <- liftIO $ handle (\e -> return (e::IOException) >> return Nothing)
+>        $  (Just <$>) $ runSqlPersistMPool sql pool
+>   maybe (raise internalServerError500) return r
+
