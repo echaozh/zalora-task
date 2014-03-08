@@ -120,7 +120,11 @@ work, and can be imported from the same old module.
 >     shoeSize <- either (const $ raise badRequest400) return $ readEither
 >                 $ size shoe
 >     return $ M.Shoe (description shoe) (color shoe) shoeSize (pack name)
->
+
+The task asked to give a _local path_ as the `src` of the `img`, which I think
+is impossible, if the _local path_ is for the client to see. I think it means
+the _local path_ on the server, and then converted into a client fetchable URI.
+
 > showShoes :: AppActionM Connection IO ()
 > showShoes = do
 >   shoeId' <- param "id"
