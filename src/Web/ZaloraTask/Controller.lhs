@@ -80,6 +80,13 @@ The controller interface. Notice there are 2 `get "/shoes"` routes, with the
 first handling the paged listing, and the second as a fallthrough for the
 unpaged listing.
 
+Notice that the Haskell server doesn't serve static files or handle the `/shoes/`
+(with a trailing slash) path. I use nginx to do both. I am familiar with nginx,
+so I go with it for now. I guess [keter](https://github.com/snoyberg/keter) may
+be able to do this and more, and I would like to try it out sometime.
+
+You will find the sample `nginx.conf` at the root of the repo.
+
 > routes :: AppM Connection IO ()
 > routes = do
 >   post "/shoes"     makeShoes
