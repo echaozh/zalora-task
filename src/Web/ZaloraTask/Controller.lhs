@@ -182,7 +182,6 @@ backend-specific.)
 
 > runSqlM :: ConnectionPool -> SqlPersistM a -> AppActionM Connection IO a
 > runSqlM pool sql = do
->   r <- liftIO $ handle (\e -> return (e::IOException) >> return Nothing)
->        -- $ handle (\e -> return (e::SqlError) >> return Nothing)
->        $ (Just <$>) $ runSqlPersistMPool sql pool
->   maybe (raise internalServerError500) return r
+>   r <- liftIO $ tryJust (\e -> return $ Just (e::IOException))
+>        $ runSqlPersistMPool sql pool
+>   either (const $ raise internalServerError500) return r
