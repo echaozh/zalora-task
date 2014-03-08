@@ -8,6 +8,7 @@ import Data.ByteString (ByteString)
 import Database.Persist.Postgresql (Connection, withPostgresqlPool)
 
 import Network.Wai.Handler.Warp (Port)
+import Network.Wai.Middleware.RequestLogger
 
 import Web.Scotty.Trans
 
@@ -19,6 +20,7 @@ zalora port dir connStr poolSize pgSize = do
   withPostgresqlPool connStr poolSize $ \p ->
     let config = AppConfig dir p pgSize
     in scottyT port (runApp config) (runApp config) $ do
+      middleware logStdoutDev -- for development use, not to be in production
       handleAppError
       routes
 
