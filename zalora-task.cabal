@@ -78,4 +78,4 @@ test-suite zalora-spec
                        http-types >=0.8 && <0.9, wai >=2.0 && <2.1,
                        wai-extra >=2.0 && <2.1,
                        warp >=2.0 && <2.1, scotty >=0.6 && <0.7,
-                       hspec2 -any, wai-test >=2.0 && <2.1
+                       hspec2 >=0.1 && <0.2, wai-test >=2.0 && <2.1

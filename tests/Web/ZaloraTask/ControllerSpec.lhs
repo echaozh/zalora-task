@@ -35,7 +35,6 @@ and extract data from the HTML returned by the server app.
 > import System.Directory
 >
 > import Test.Hspec
-> import Test.Hspec.Core hiding (describe, it)
 
   -->
 
@@ -75,7 +74,7 @@ database, fixture data don't need to be explicitly deleted. Thanks to Hspec 2.0,
 >                    <> "\"size\":\"35\",\"photo\":\"" <> photoEncoded <> "\"}")
 >       badReq  = SRequest rawReq ""
 >
->   context "When everything is fine" $ beforeUniversal (run goodReq) $ do
+>   context "When everything is fine" $ beforeWith (run goodReq) $ do
 >       it "redirects to showShoes" $ \resp -> do
 >         simpleStatus resp `shouldBe` found302
 >         lookup hLocation (simpleHeaders resp) `shouldBe` Just "/shoes/6"
@@ -87,7 +86,7 @@ database, fixture data don't need to be explicitly deleted. Thanks to Hspec 2.0,
 >     it "reports bad request" $ \pool ->
 >       statusFor badReq pool `shouldReturn` badRequest400
 >
->   context "When db fails" $ beforeUniversal dropTable $ do
+>   context "When db fails" $ beforeWith dropTable $ do
 >     it "reports internal server error" $ \pool -> do
 >       statusFor goodReq pool `shouldReturn` internalServerError500
 >
@@ -115,7 +114,7 @@ database, fixture data don't need to be explicitly deleted. Thanks to Hspec 2.0,
 > listShoesSpec = describe "listShoes" $ do
 >   let pathFor = ("?p="<>) . (show::Int -> String)
 >
->   describe "listing" $ beforeUniversal (return . flip extractShoeList) $ do
+>   describe "listing" $ beforeWith (return . flip extractShoeList) $ do
 >     context "Without paging" $ do
 >       it "links to all shoes" $ \extract' ->
 >         extract' ""  `shouldReturn` shoeList 1 5
@@ -125,7 +124,7 @@ database, fixture data don't need to be explicitly deleted. Thanks to Hspec 2.0,
 >         extract' (pathFor 2) `shouldReturn` shoeList 3 4
 >         extract' (pathFor 3) `shouldReturn` shoeList 5 5
 >
->   describe "paging" $ beforeUniversal (return . flip statusFor') $ do
+>   describe "paging" $ beforeWith (return . flip statusFor') $ do
 >     context "and page number is not right" $ do
 >       it "reports not found for non-existent page" $ \statusFor'' ->
 >         statusFor'' (pathFor 100) `shouldReturn` notFound404
@@ -134,9 +133,8 @@ database, fixture data don't need to be explicitly deleted. Thanks to Hspec 2.0,
 >         statusFor'' "?p=NaN" `shouldReturn` badRequest400
 >
 >   describe "navigation"
->     $ beforeUniversal (\pool ->
->                         return (\page sel ->
->                                  raha (pathFor page) pool sel "href")) $ do
+>     $ beforeWith (\pool -> return (\page sel ->
+>                                     raha (pathFor page) pool sel "href")) $ do
 >       context "and a previous page" $
 >         it "links to that" $ \test -> do
 >           test 2 "#prev" `shouldReturn` ["/shoes?p=1"]
@@ -250,15 +248,7 @@ Helpers to check HTML in response.
 >   sequence (raht path pool ".shoe" : (map (uncurry $ raha path pool)
 >                                       [(".link", "href"), (".photo", "src")]))
 
-To make better `around` filters.
+Hspec2 now has `aroundWith`, but lacks `beforeWith`. So I'm wrapping one myself.
 
-> beforeUniversal :: (b -> IO a) -> SpecWith a -> SpecWith b
-> beforeUniversal a1 = aroundUniversal (\x a2 -> a1 x >>= a2)
-
-> aroundUniversal :: (b -> (a -> IO ()) -> IO ()) -> SpecWith a -> SpecWith b
-> aroundUniversal a2 = mapAround $ \a1 a3 -> a1 $ \x -> a2 x a3
->
-> mapAround :: (((b -> IO ()) -> IO ()) -> (a -> IO ()) -> IO ())
->           -> SpecWith a -> SpecWith b
-> mapAround f = mapSpecItem $ \item -> item {itemExample = \params a1 ->
->                                             itemExample item params (f a1)}
+> beforeWith :: (b -> IO a) -> SpecWith a -> SpecWith b
+> beforeWith bef = aroundWith (\x b -> bef b >>= x)
