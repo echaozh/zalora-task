@@ -164,11 +164,17 @@ compile but may fail at runtime. This is bad because you don't always know what
 may get thrown at your face, and the documents are not always helpful in this
 matter.
 
-`IOExcetion`s are always internal server errors, so we raise them directly.
+`IOException`s are always internal server errors, so it is raised directly.
+`IOException`s are only caught to please the unit tests. For the server setup,
+thrown `IOException`s or `SqlError`s automatically produces an internal server
+error which can then be wrapped up in a pretty page by nginx. The server process
+lives, so it's OK. (Also, explicitly handling `SqlError` requires an explicit
+import of the backend database module, which makes the controller
+backend-specific.)
 
 > runSqlM :: ConnectionPool -> SqlPersistM a -> AppActionM Connection IO a
 > runSqlM pool sql = do
 >   r <- liftIO $ handle (\e -> return (e::IOException) >> return Nothing)
->        $  (Just <$>) $ runSqlPersistMPool sql pool
+>        -- $ handle (\e -> return (e::SqlError) >> return Nothing)
+>        $ (Just <$>) $ runSqlPersistMPool sql pool
 >   maybe (raise internalServerError500) return r
-

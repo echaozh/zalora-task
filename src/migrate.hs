@@ -6,8 +6,6 @@ import Data.ByteString.Char8 (pack)
 
 import Database.Persist.Postgresql hiding (migrate)
 
-import Prelude.Unicode
-
 import System.Environment
 
 import Web.ZaloraTask.Model
