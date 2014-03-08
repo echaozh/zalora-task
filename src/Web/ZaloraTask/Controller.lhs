@@ -98,6 +98,10 @@ Scotty handles parsing of the JSON data from the request body, but it may throw
 when the parsing fails. However, all errors are automatically translated into
 bad request errors, so we don't need to handle them here.
 
+Notice that all uploaded photos are directly saved under the configured photo
+directory. For a show case, this should not present a problem. However, for
+production use, It may be a better idea to create layers of subdirectories.
+
 When dealing with string types, treating them all as `Monoid` instances makes
 the code polymorphic and better tolerate underlying implemention changes. No
 matter what you're using, `String`, `ByteString`s, or `Text`s, `<>` will always
