@@ -1,4 +1,4 @@
-# Simple Restful server to make, list, and display info about shoes (for Zalora)
+# Simple Restful service for shoes
 
 ## The project
 
