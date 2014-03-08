@@ -1,4 +1,4 @@
-# Simple Restful service for shoes
+# Simple RESTful service for shoes
 
 ## The project
 
