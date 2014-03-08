@@ -63,8 +63,14 @@ self-motivated. On this project, for example, I often code till early morning to
 fix compilation errors. I hate to sleep with unsolved problems, though, I do have
 to sleep, everyday that is.
 
+Though I have not written any Haskell code for work, I apply the functional idea
+anywhere possible. I also advocate functional thinking in my team. When writing
+C++ & python, I use functional tools too. The functions in the `algorithm`
+header in STL are actually quite functional. And Python has `functools` and
+`itertools`.
+
 As a Haskeller, I cannot say I'm more than intermediate. I am totally self
-taught, and am willing to learn from the experienced in this language. I have
+taught, and am willing to learn from those experienced in this language. I have
 pratical skills to tackle engineering problems, and can help with service
 development. I am also fancinated by the open source movement, and am eager to
 contribute.
