@@ -251,4 +251,4 @@ Helpers to check HTML in response.
 Hspec2 now has `aroundWith`, but lacks `beforeWith`. So I'm wrapping one myself.
 
 > beforeWith :: (b -> IO a) -> SpecWith a -> SpecWith b
-> beforeWith bef = aroundWith (\x b -> bef b >>= x)
+> beforeWith bef = aroundWith $ \x b -> bef b >>= x
