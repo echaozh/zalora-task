@@ -247,8 +247,3 @@ Helpers to check HTML in response.
 > extractShoeList path pool =
 >   sequence (raht path pool ".shoe" : (map (uncurry $ raha path pool)
 >                                       [(".link", "href"), (".photo", "src")]))
-
-Hspec2 now has `aroundWith`, but lacks `beforeWith`. So I'm wrapping one myself.
-
-> beforeWith :: (b -> IO a) -> SpecWith a -> SpecWith b
-> beforeWith bef = aroundWith $ \x b -> bef b >>= x
