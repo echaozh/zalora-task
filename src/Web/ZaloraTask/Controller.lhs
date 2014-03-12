@@ -34,7 +34,6 @@ qualified.
 
   <!--
 
-> import Data.Functor
 > import Data.Hex
 > import Data.Monoid
 > import Data.Ratio ((%))
@@ -182,6 +181,6 @@ backend-specific.)
 
 > runSqlM :: ConnectionPool -> SqlPersistM a -> AppActionM Connection IO a
 > runSqlM pool sql = do
->   r <- liftIO $ tryJust (\e -> return $ Just (e::IOException))
+>   r <- liftIO $ tryJust (\e -> Just (e::IOException))
 >        $ runSqlPersistMPool sql pool
 >   either (const $ raise internalServerError500) return r
