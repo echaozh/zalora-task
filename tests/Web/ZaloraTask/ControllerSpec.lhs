@@ -46,9 +46,9 @@ and extract data from the HTML returned by the server app.
 > import Web.Scottish
 > import Web.Scottish.Database
 >
+> import Web.ZaloraTask.App hiding (photoDir, pool)
 > import Web.ZaloraTask.Controller
 > import Web.ZaloraTask.Model
-> import Web.ZaloraTask.Types hiding (photoDir, pool)
 
   -->
 

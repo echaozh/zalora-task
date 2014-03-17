@@ -10,8 +10,8 @@ import Network.Wai.Middleware.RequestLogger
 import Web.Scottish
 import Web.Scottish.Database
 
+import Web.ZaloraTask.App
 import Web.ZaloraTask.Controller
-import Web.ZaloraTask.Types
 
 zalora :: Port -> FilePath -> ByteString -> Int -> Int -> IO ()
 zalora port dir connStr poolSize pgSize = do

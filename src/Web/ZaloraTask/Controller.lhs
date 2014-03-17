@@ -59,8 +59,8 @@ Esqueleto depends on Persistent, so we use that too.
 > import Web.Scottish
 > import Web.Scottish.Database.Persist
 >
+> import Web.ZaloraTask.App
 > import qualified Web.ZaloraTask.Model as M
-> import Web.ZaloraTask.Types hiding (pool, photoDir)
 > import Web.ZaloraTask.View
 
   -->

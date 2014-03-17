@@ -5,7 +5,7 @@
 
   -->
 
-> module Web.ZaloraTask.Types where
+> module Web.ZaloraTask.App where
 
 [Scotty](http://hackage.haskell.org/package/scotty) is an easy to use web
 micro-framework. However, it doesn't come with user accessible configurations or
@@ -17,10 +17,10 @@ settings access is more than enough. For clearance, I call read-only data
 
   <!--
 
-> import Control.Applicative
 > import Control.Lens
 >
 > import Data.Default
+> import Data.Functor
 > import Data.Pool
 
   -->
