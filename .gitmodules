@@ -1,0 +1,3 @@
+[submodule "deps/scottish"]
+	path = deps/scottish
+	url = git@github.com:echaozh/scottish.git
