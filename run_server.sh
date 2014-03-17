@@ -12,6 +12,7 @@ cd "$wd"
 function on_exit {
     kill $(cat /tmp/nginx.pid)
     rm /tmp/nginx.{error,access}.log
+    rm /tmp/nginx.client_bodies
     [ -n test ] && rm -rf "$photodir"
 }
 
