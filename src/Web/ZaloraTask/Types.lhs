@@ -1,5 +1,6 @@
   <!--
 
+> {-# LANGUAGE MultiParamTypeClasses #-}
 > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
   -->
@@ -18,81 +19,52 @@ settings access is more than enough. For clearance, I call read-only data
 
 > import Control.Applicative
 > import Control.Lens
-> import Control.Monad.IO.Class
-> import Control.Monad.Reader
 >
+> import Data.Default
 > import Data.Pool
 
   -->
 
-Lazy `Text` is used throughout the Scotty library, so I treat it as the default
-string type, and import its operations which don't conflict with `Prelude`
-directly into our namespace. `ByteString`s' and strict `Text`'s modules are
-always imported qualified.
+`scottish` is a library I roll myself, to make writing `scotty` apps with configs
+and states easier. It also provides helpers for database querying, etc.
 
-> import Data.Text.Lazy (pack)
-
-  <!--
-
-> import Network.HTTP.Types.Status
-
-> import Web.Scotty.Trans
-
-  -->
+> import Web.Scottish
+> import Web.Scottish.Database
 
 By my convention, the directory setting and connection pool are gathered into a
 record type called `AppConfig`. I am trying out `lenses`, so I'll make some.
+
+Also make the configuration data type an instance of `HasDataConnectionPool`
+from the `scottish` library I roll, which makes running `persistent` transaction
+much easier.
 
 > -- config is read-only, state is read-write
 > data AppConfig conn = AppConfig {_photoDir :: FilePath, _pool :: Pool conn,
 >                                  _pageSize :: Int}
 > $(makeLenses ''AppConfig)
-
-The `App` monad carries the configurations around.
-
-> newtype App conn m a = App {unApp :: ReaderT (AppConfig conn) m a}
->                      deriving (Functor, Monad, Applicative, MonadIO,
->                                MonadReader (AppConfig conn))
-
-I'd like to `raise` HTTP status codes as `ScottyError`s so actions can early exit
-with an abnormal status code. So let's make `Status` as an instance of the
-`ScottyError` class. I am using `readEither` from Scotty in places where `read`
-may fail, glad it comes free with the framework.
-
-For now, unless you go to wild pages out of control of the `Controller` and land
-on a Scotty generated 404 page, you will only see the status code with the
-default reason message.
-
-Scotty may `raise` its own error with a string instead of a status number.
-Fortunately, the present implementation only `raise`s when parsing inputs fails.
-Therefore, for now, all Scotty errors are translated directly into bad request
-errors.
-
-> instance ScottyError Status where
->   -- for now, Scotty only `raise`s when input is bad
->   stringError = either (const badRequest400) id . (toEnum<$>) . readEither
->                 . pack
->   showError   = pack . show
-
-The wrapped application and action monads. Notice the `Status` as the error type
-in `ScottyT`s type parameters.
-
-We also define the `runApp` function to strip the outer monads and go back to the
-base monad, which may, most likely, be the IO monad.
-
-> type AppM       conn m = ScottyT Status (App conn m)
-> type AppActionM conn m = ActionT Status (App conn m)
 >
-> runApp :: Monad m => AppConfig conn -> App conn m a -> m a
-> runApp config = flip runReaderT (config & photoDir %~ (++"/")) . unApp
+> instance HasDatabaseConnectionPool conn (AppConfig conn) where
+>   poolLens = pool
+> instance Default (AppConfig conn) where
+>   def = AppConfig undefined undefined undefined
+
+The following monads are from `scottish` too. They use `Status` instead of the
+default `Text` as the error type. Raising `Status` from `AppActionM` will be
+automatically handled by setting the status of the response.
+
+> type AppM       conn a = ScottishM'       (AppConfig conn) () a
+> type AppActionM conn a = ScottishActionM' (AppConfig conn) () a
 
 Configuratin accessors for web actions.
 
-> getPool :: (MonadTrans t, Monad m) => t (App conn m) (Pool conn)
-> getPool = lift . view $ pool
+> getPhotoDir :: AppActionM conn FilePath
+> getPhotoDir = (^.photoDir) <$> getConfig
 >
-> getPhotoDir :: (MonadTrans t, Monad m) => t (App conn m) FilePath
-> getPhotoDir = lift . view $ photoDir
+> getPageSize :: AppActionM conn Int
+> getPageSize = (^.pageSize) <$> getConfig
 >
-> getPageSize :: (MonadTrans t, Monad m) => t (App conn m) Int
-> getPageSize = lift . view $ pageSize
+> setPhotoDir :: FilePath -> AppM conn ()
+> setPhotoDir = modifyConfig . set photoDir
+>
+> setPageSize :: Int -> AppM conn ()
+> setPageSize = modifyConfig . set pageSize

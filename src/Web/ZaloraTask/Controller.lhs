@@ -16,7 +16,6 @@ will include all routes.
 
   <!--
 
-> import Control.Exception
 > import Control.Monad.Reader
 >
 > import Crypto.Hash.MD5
@@ -57,7 +56,8 @@ Esqueleto depends on Persistent, so we use that too.
 > import Network.HTTP.Types.Status
 >
 > import Web.PathPieces
-> import Web.Scotty.Trans
+> import Web.Scottish
+> import Web.Scottish.Database.Persist
 >
 > import qualified Web.ZaloraTask.Model as M
 > import Web.ZaloraTask.Types hiding (pool, photoDir)
@@ -86,7 +86,7 @@ be able to do this and more, and I would like to try it out sometime.
 
 You will find the sample `nginx.conf` at the root of the repo.
 
-> routes :: AppM Connection IO ()
+> routes :: AppM Connection ()
 > routes = do
 >   post "/shoes"     makeShoes
 >   get  "/shoes/:id" showShoes
@@ -106,11 +106,10 @@ the code polymorphic and better tolerate underlying implemention changes. No
 matter what you're using, `String`, `ByteString`s, or `Text`s, `<>` will always
 work, and can be imported from the same old module.
 
-> makeShoes :: AppActionM Connection IO ()
+> makeShoes :: AppActionM Connection ()
 > makeShoes = do
 >   shoe <- jsonData
->   pool <- getPool
->   shoeId <- prepare shoe >>= runSqlM pool . insert
+>   shoeId <- prepare shoe >>= runSql . insert
 >   redirect $ "/shoes/" <> (fromStrict . toPathPiece . unKey $ shoeId)
 >  where
 >   prepare shoe = do
@@ -128,59 +127,35 @@ The task asked to give a _local path_ as the `src` of the `img`, which I think
 is impossible, if the _local path_ is for the client to see. I think it means
 the _local path_ on the server, and then converted into a client fetchable URI.
 
-> showShoes :: AppActionM Connection IO ()
+> showShoes :: AppActionM Connection ()
 > showShoes = do
 >   shoeId' <- param "id"
->   pool <- getPool
 >   shoeId <- maybe (raise notFound404) return $ fromPathPiece $ toStrict shoeId'
->   runSqlM pool (P.get shoeId)
->     >>= maybe (raise notFound404) (html . showPage shoeId')
+>   runSql (P.get shoeId) >>= maybe (raise notFound404) (html . showPage shoeId')
 >
-> listShoes :: AppActionM Connection IO ()
+> listShoes :: AppActionM Connection ()
 > listShoes = do
 >   page' <- param "p" `rescue` const next
 >   page <- either (const $ raise badRequest400) return $ readEither page'
->   pool <- getPool
 >   pgSize <- getPageSize
 >   let intConv = fromInteger . toInteger
->   total <- runSqlM pool $ P.count ([]::[P.Filter (M.ShoeGeneric backend)])
+>   total <- runSql $ P.count ([]::[P.Filter (M.ShoeGeneric backend)])
 >   shoes <- if page <= 0 || (pgSize * (page - 1) > total
 >                             && (total /= 0 || page /= 1))
 >            then raise notFound404
->            else runSqlM pool (select
->                               $ from $ \shoe -> do
->                                 orderBy [asc $ shoe ^. M.ShoeId]
->                                 offset $ intConv $ pgSize * (page - 1)
->                                 limit $ intConv pgSize
->                                 return shoe)
+>            else runSql (select
+>                         $ from $ \shoe -> do
+>                           orderBy [asc $ shoe ^. M.ShoeId]
+>                           offset $ intConv $ pgSize * (page - 1)
+>                           limit $ intConv pgSize
+>                           return shoe)
 >   html $ (listLayout (navPartial page (ceiling $ total % pgSize))
 >           $ listPartial shoes)
 >
-> listAllShoes :: AppActionM Connection IO ()
+> listAllShoes :: AppActionM Connection ()
 > listAllShoes = do
->   pool <- getPool
->   shoes <- runSqlM pool (select
->                          $ from $ \shoe -> do
->                            orderBy [asc $ shoe ^. M.ShoeId]
->                            return shoe)
+>   shoes <- runSql (select
+>                    $ from $ \shoe -> do
+>                      orderBy [asc $ shoe ^. M.ShoeId]
+>                      return shoe)
 >   html $ listLayout (return ()) (listPartial shoes)
-
-Helper function to wrap the database access which may throw `IOException`s.
-Haskell exceptions are not type safe, as the code without exception handlers can
-compile but may fail at runtime. This is bad because you don't always know what
-may get thrown at your face, and the documents are not always helpful in this
-matter.
-
-`IOException`s are always internal server errors, so it is raised directly.
-`IOException`s are only caught to please the unit tests. For the server setup,
-thrown `IOException`s or `SqlError`s automatically produces an internal server
-error which can then be wrapped up in a pretty page by nginx. The server process
-lives, so it's OK. (Also, explicitly handling `SqlError` requires an explicit
-import of the backend database module, which makes the controller
-backend-specific.)
-
-> runSqlM :: ConnectionPool -> SqlPersistM a -> AppActionM Connection IO a
-> runSqlM pool sql = do
->   r <- liftIO $ tryJust (\e -> Just (e::IOException))
->        $ runSqlPersistMPool sql pool
->   either (const $ raise internalServerError500) return r

@@ -43,9 +43,9 @@ and extract data from the HTML returned by the server app.
 
   <!--
 
-> import Web.Scotty.Trans (scottyAppT)
+> import Web.Scottish
+> import Web.Scottish.Database
 >
-> import Web.ZaloraTask (handleAppError)
 > import Web.ZaloraTask.Controller
 > import Web.ZaloraTask.Model
 > import Web.ZaloraTask.Types hiding (photoDir, pool)
@@ -85,10 +85,6 @@ database, fixture data don't need to be explicitly deleted. Thanks to Hspec 2.0,
 >   context "When provided with invalid input" $ do
 >     it "reports bad request" $ \pool ->
 >       statusFor badReq pool `shouldReturn` badRequest400
->
->   context "When db fails" $ beforeWith dropTable $ do
->     it "reports internal server error" $ \pool -> do
->       statusFor goodReq pool `shouldReturn` internalServerError500
 >
 > showShoesSpec :: SpecWith ConnectionPool
 > showShoesSpec = describe "showShoes" $ do
@@ -195,11 +191,6 @@ Around filter to create/release database connection pool and import fixture data
 > fixture = runSqlPersistMPool $ do
 >   runMigration migrate
 >   replicateM_ 5 $ insert defaultShoe
->
-> dropTable :: ConnectionPool -> IO ConnectionPool
-> dropTable pool = do
->   flip runSqlPersistMPool pool $ rawExecute "drop table shoe" []
->   return pool
 
 Helpers to run test sessions to the app. We will not run a full-blown server
 handling network traffic; rather, we just run the app and feed it requests in
@@ -210,8 +201,12 @@ Status codes are often checked, so let's make it less tedious.
 > run :: SRequest -> ConnectionPool -> IO SResponse
 > run req p = runSession (srequest req) =<< app
 >   where
->     app = scottyAppT (runApp config) (runApp config) $ handleAppError >> routes
->     config = AppConfig photoDir p 2
+>     app = scottishApp' $ do
+>       setPool $ return p
+>       setPhotoDir photoDir
+>       setPageSize 2
+>
+>       routes
 >
 > statusFor :: SRequest -> ConnectionPool -> IO Status
 > statusFor = (simpleStatus<$>) .: run
