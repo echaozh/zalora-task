@@ -1,7 +1,7 @@
   <!--
 
-> {-# LANGUAGE MultiParamTypeClasses #-}
 > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+> {-# LANGUAGE MultiParamTypeClasses #-}
 
   -->
 
@@ -21,6 +21,7 @@ settings access is more than enough. For clearance, I call read-only data
 >
 > import Data.Default
 > import Data.Functor
+> import Data.Monoid
 > import Data.Pool
 
   -->
@@ -64,7 +65,7 @@ Configuratin accessors for web actions.
 > getPageSize = (^.pageSize) <$> getConfig
 >
 > setPhotoDir :: FilePath -> AppM conn ()
-> setPhotoDir = modifyConfig . set photoDir
+> setPhotoDir = modifyConfig . set photoDir . (<>"/")
 >
 > setPageSize :: Int -> AppM conn ()
 > setPageSize = modifyConfig . set pageSize
