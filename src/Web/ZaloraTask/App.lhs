@@ -26,8 +26,9 @@ settings access is more than enough. For clearance, I call read-only data
 
   -->
 
-`scottish` is a library I roll myself, to make writing `scotty` apps with configs
-and states easier. It also provides helpers for database querying, etc.
+[scottish](https://github.com/echaozh/scottish) is a library I roll myself, to
+make writing `scotty` apps with configs and states easier. It also provides
+helpers for database querying (for now), etc (in the future).
 
 > import Web.Scottish
 > import Web.Scottish.Database
@@ -36,8 +37,7 @@ By my convention, the directory setting and connection pool are gathered into a
 record type called `AppConfig`. I am trying out `lenses`, so I'll make some.
 
 Also make the configuration data type an instance of `HasDataConnectionPool`
-from the `scottish` library I roll, which makes running `persistent` transaction
-much easier.
+from `scottish`, which makes running `persistent` transaction easier.
 
 > -- config is read-only, state is read-write
 > data AppConfig conn = AppConfig {_photoDir :: FilePath, _pool :: Pool conn,

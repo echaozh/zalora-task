@@ -86,6 +86,10 @@ database, fixture data don't need to be explicitly deleted. Thanks to Hspec 2.0,
 >     it "reports bad request" $ \pool ->
 >       statusFor badReq pool `shouldReturn` badRequest400
 >
+>   context "When db fails" $ beforeWith dropTable $ do
+>     it "reports internal server error" $ \pool -> do
+>       statusFor goodReq pool `shouldReturn` internalServerError500
+>
 > showShoesSpec :: SpecWith ConnectionPool
 > showShoesSpec = describe "showShoes" $ do
 >   context "When requesting existing shoes" $ do
@@ -191,6 +195,11 @@ Around filter to create/release database connection pool and import fixture data
 > fixture = runSqlPersistMPool $ do
 >   runMigration migrate
 >   replicateM_ 5 $ insert defaultShoe
+>
+> dropTable :: ConnectionPool -> IO ConnectionPool
+> dropTable pool = do
+>   flip runSqlPersistMPool pool $ rawExecute "drop table shoe" []
+>   return pool
 
 Helpers to run test sessions to the app. We will not run a full-blown server
 handling network traffic; rather, we just run the app and feed it requests in

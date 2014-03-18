@@ -109,7 +109,7 @@ work, and can be imported from the same old module.
 > makeShoes :: AppActionM Connection ()
 > makeShoes = do
 >   shoe <- jsonData
->   shoeId <- prepare shoe >>= runSql . insert
+>   shoeId <- prepare shoe >>= runSql' . insert
 >   redirect $ "/shoes/" <> (fromStrict . toPathPiece . unKey $ shoeId)
 >  where
 >   prepare shoe = do
@@ -131,7 +131,8 @@ the _local path_ on the server, and then converted into a client fetchable URI.
 > showShoes = do
 >   shoeId' <- param "id"
 >   shoeId <- maybe (raise notFound404) return $ fromPathPiece $ toStrict shoeId'
->   runSql (P.get shoeId) >>= maybe (raise notFound404) (html . showPage shoeId')
+>   runSql' (P.get shoeId)
+>     >>= maybe (raise notFound404) (html . showPage shoeId')
 >
 > listShoes :: AppActionM Connection ()
 > listShoes = do
@@ -139,23 +140,23 @@ the _local path_ on the server, and then converted into a client fetchable URI.
 >   page <- either (const $ raise badRequest400) return $ readEither page'
 >   pgSize <- getPageSize
 >   let intConv = fromInteger . toInteger
->   total <- runSql $ P.count ([]::[P.Filter (M.ShoeGeneric backend)])
+>   total <- runSql' $ P.count ([]::[P.Filter (M.ShoeGeneric backend)])
 >   shoes <- if page <= 0 || (pgSize * (page - 1) > total
 >                             && (total /= 0 || page /= 1))
 >            then raise notFound404
->            else runSql (select
->                         $ from $ \shoe -> do
->                           orderBy [asc $ shoe ^. M.ShoeId]
->                           offset $ intConv $ pgSize * (page - 1)
->                           limit $ intConv pgSize
->                           return shoe)
+>            else runSql' (select
+>                          $ from $ \shoe -> do
+>                            orderBy [asc $ shoe ^. M.ShoeId]
+>                            offset $ intConv $ pgSize * (page - 1)
+>                            limit $ intConv pgSize
+>                            return shoe)
 >   html $ (listLayout (navPartial page (ceiling $ total % pgSize))
 >           $ listPartial shoes)
 >
 > listAllShoes :: AppActionM Connection ()
 > listAllShoes = do
->   shoes <- runSql (select
->                    $ from $ \shoe -> do
->                      orderBy [asc $ shoe ^. M.ShoeId]
->                      return shoe)
+>   shoes <- runSql' (select
+>                     $ from $ \shoe -> do
+>                       orderBy [asc $ shoe ^. M.ShoeId]
+>                       return shoe)
 >   html $ listLayout (return ()) (listPartial shoes)
